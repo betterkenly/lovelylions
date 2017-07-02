@@ -1,52 +1,63 @@
 var express = require('express');
 var db = require('../database/index.js');
 var bodyParser = require('body-parser');
+
 var fs = require('fs');
 var crypto = require('crypto');
 
+var session = require('express-session');
 var app = express();
+var port = process.env.PORT || 3000;
+
 app.use(express.static(__dirname + '/../client/dist'));
 // app.use(bodyParser.urlencoded({extended: true}));
 app.use(bodyParser.json());
 
 
-var path = require('path');
-var favicon = require('serve-favicon');
-var logger = require('morgan');
-var cookieParser = require('cookie-parser');
-var passport = require('passport');
+//saloni code for authentication start
+var path = require('path'); 
+var favicon = require('serve-favicon');  
+var logger = require('morgan');   
+var cookieParser = require('cookie-parser');  
+var passport = require('passport');  
 var router = express.Router();
-//var LocalStrategy = require('passport-local').Strategy;
+//var LocalStrategy = require('passport-local').Strategy;  
 var session = require('express-session');
 require('../config/passport.js')(passport);
+
 app.use(logger('dev'));
 app.use(cookieParser());
-app.use(express.session({ secret: 'keyboard cat' }));
+app.use(session({ secret: 'keyboard cat' }));
 app.use(passport.initialize());
 app.use(passport.session());
 app.get('/auth/facebook', passport.authenticate('facebook', { scope: 'email' }));
 
-app.get('/auth/facebook/callback', passport.authenticate('facebook', {
+
+app.get('/auth/facebook/callback', passport.authenticate('facebook', {  
   successRedirect: '/profile',
   failureRedirect: '/',
 }));
 
-app.get('/profile', isLoggedIn, function(req, res) {
+
+app.get('/profile', isLoggedIn, function(req, res) {  
   //console.log(req.user);
   //res.send(req.user);
   res.redirect('/?username=' + req.user[0]['name']);
 });
+
 
 app.get('/logout', function(req, res) {
   req.logout();
   res.redirect('/');
 });
 
+
 function isLoggedIn(req, res, next) {
   if (req.isAuthenticated())
       return next();
   res.redirect('/');
 }
+
 
 
 var generateFilename = (fileData) => {
@@ -57,7 +68,7 @@ var generateFilename = (fileData) => {
 
 app.get('/gallery', (req, res) => {
   var username = req.query.username;
-
+  console.log(username);
   var DUMMY_GALLERY_DATA = [
       {title: 'Title', head: {path:'paper.png', artist: 'artist1'}, torso: {path: 'paper.png', artist: 'artist2'}, legs: {path: 'paper.png', artist: 'artist3'}},
       {title: 'Title', head: {path:'paper.png', artist: 'artist1'}, torso: {path: 'paper.png', artist: 'artist2'}, legs: {path: 'paper.png', artist: 'artist3'}},
@@ -70,22 +81,43 @@ app.get('/gallery', (req, res) => {
 
 app.get('/generate', (req, res) => {
   var userPart = req.query.part;
+  console.log('user body part', userPart);
+  // var DUMMY_PIC_DATA = {
+  //   title: 'Title',
+  //   head: {path:'head.png', artist: 'artist1'},
+  //   torso: {path: 'torso.png', artist: 'artist2'},
+  //   legs: {path: 'legs.png', artist: 'artist3'}
+  // };
+  db.getTwoImages(userPart, (data) => {
+    res.send(JSON.stringify(data));
+  });
+  //call getTwoImages func, pass in userPart;
 
-  var DUMMY_PIC_DATA = {
-    title: 'Title',
-    head: {path:'head.png', artist: 'artist1'},
-    torso: {path: 'torso.png', artist: 'artist2'},
-    legs: {path: 'legs.png', artist: 'artist3'}
-  };
-
-  res.end(JSON.stringify(DUMMY_PIC_DATA));
+  // res.end(JSON.stringify(DUMMY_PIC_DATA));
 });
 
 app.post('/save', (req, res) => {
-  var base64Data = req.body[req.query.part].path.split(',')[1]
+  var base64Data = req.body[req.query.part].path.split(',')[1];
   var fileName = generateFilename(base64Data);
+  var username = req.body.head.artist;
   fs.writeFile(`./server/images/${fileName}.png`, base64Data, 'base64', (err) => {
     if (err) console.log(err);
+
+    req.body[req.query.part].path = `./images/${fileName}`;
+    let thePath = `./images/${fileName}`;
+    // db.saveImageToFinalImage(req.body, req.query.part, thePath, (data) => {
+    //   res.end();
+    // });
+    console.log('the req body', req.body);
+    console.log('the part', req.query.part);
+    console.log('path', thePath);
+  });
+});
+
+app.get('/testing', (req, res) => {
+  db.saveImageToFinalImage(db.dummyData, 'head', 'testingtestingpath', (data) => {
+    res.send(data);
+    res.end();
   });
 });
 
@@ -94,15 +126,6 @@ app.get('/images', (req, res) => {
   res.sendFile(`${__dirname}/images/${file}`, () => res.end());
 });
 
-
-
-app.get('/testing', (req, res) => {
-  db.getTwoImages('head', (data) => {
-    res.send(data);
-  });
-});
-
-
-app.listen(3000, function() {
-  console.log('listening on port 3000!');
+app.listen(port, function() {
+  console.log(`listening on port ${port}!`);
 });

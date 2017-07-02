@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 var express = require('express');
 var app = express();
 var pg = require('pg');
@@ -43,7 +42,7 @@ pool.connection(function(err, client, done) {
 
 //   client.end();
 // }
-=======
+
 const Promise = require('bluebird');
 const difference = require('underscore').difference;
 const options = {
@@ -54,13 +53,14 @@ const cn = {
     host: 'localhost',
     port: 5432,
     database: 'mydb',
-    user: 'postgres',
-    password: 'postgres'
+    user: 'kenlyhui',
+    password: ''
 };
-const db = pgp(cn);
 
-exports.db = db;
-
+if (process.env.DATABASE_URL) {
+  pgp.pg.defaults.ssl = true;
+};
+const db = pgp(process.env.DATABASE_URL || cn);
 
 let query = function(queryStr, callback){
   // simple function for querying the db
@@ -74,8 +74,8 @@ let query = function(queryStr, callback){
    });
 };
 
-
 let getImage = (id, part, callback) => {
+
   //helper function, get image from particular table with specfic id(PRIMARY KEY)
   db.any(`select _path from ${part} where id = ${id}`)
     .then(path => {
@@ -85,10 +85,6 @@ let getImage = (id, part, callback) => {
       console.log(err);
   });
 };
-
-
-
-
 
 let getRandomImage = (part,callback) => {
 
@@ -105,13 +101,9 @@ let getRandomImage = (part,callback) => {
   });
 };
 
-
-
-
 let getTwoImages = (part, callback) => {
   // provide the part of body and this function will return two random image fragments of the other two parts.
     // e.g. if you give it 'head', it gives you torso image and leg image
-
   let arr1 = ['head', 'torso', 'legs'];
   let diff = difference(arr1, [part]);
   let partA = diff[0], partB = diff[1];
@@ -125,44 +117,63 @@ let getTwoImages = (part, callback) => {
 
     });
   });
-
-
 };
 
-// var mongoose = require('mongoose');
-// mongoose.connect('mongodb://localhost/exquisite');
+let getUserId = (username, callback) => {
+  var queryStr = `select id from artist where username = '${username}'`;
+  query(queryStr, (data) => {
+    callback(data[0].id);
+  });
+}
 
-// var db = mongoose.connection;
-
-// db.on('error', function() {
-//   console.log('mongoose connection error');
-// });
-
-// db.once('open', function() {
-//   console.log('mongoose connected successfully');
-// });
-
-// var userSchema = mongoose.Schema({  
-//   facebook: {
-//     id: String,
-//     token: String,
-//     email: String,
-//     name: String,
-//     username: String,
-//   }
-// });
-// module.exports = mongoose.model('User', userSchema);
-// {obj{head: abc_path}, obj{torso: def_path}}
-
-
-
-
-
-let savePartImage = (userId, part, path) => {
+let savePartImage = (userId, part, path, callback) => {
   // this function save part image to the database, e.g. save the HEAD image path and USERID to table HEAD
   var queryStr = `insert into ${part} (_path, user_id) values ('${path}', ${userId})`;
   query(queryStr, (data) => {
-    console.log(data);
+    callback(data);
+  });
+};
+
+let dummyData = {
+  title: 'abc',
+  head: {
+    partId: undefined,
+    path: 'hahaha_path',
+    artist: 'regina'
+  },
+  torso: {
+    partId: 2,
+    path: 'def_path',
+    artist: 'regina'
+  },
+  legs: {
+    partId: 2,
+    path: 'jkl_path',
+    artist: 'regina'
+  }
+}
+
+let saveImageToFinalImage = (obj, part, path, callback) => {
+  //obj = request.body, part = req.query.part , path is generate before
+  // the invocation of this function.
+  let username = obj[part]['artist'];
+  let userId;
+  getUserId(username, (data) => {
+    userId = data;
+    savePartImage(userId, part, path, (data) => {
+      console.log('save!');
+      var queryStr = `select id from ${part} where ${part}._path = '${path}'`;
+      query(queryStr, (data) => {
+        obj[part]['partId'] = data[0].id;
+        let headId = obj['head']['partId'];
+        let torsoId = obj['torso']['partId'];
+        let legsId = obj['legs']['partId'];
+        var str = `INSERT INTO final_image (head_id, torso_id, legs_id, user_id) values (${headId}, ${torsoId}, ${legsId}, ${userId})`;
+        query(str, (data) => {
+          callback(data);
+        });
+      });
+    });
   });
 };
 
@@ -181,8 +192,9 @@ module.exports = {
   getRandomImage: getRandomImage,
   getTwoImages: getTwoImages,
   savePartImage: savePartImage,
-  getAllFinalImagesOfArtist: getAllFinalImagesOfArtist
+  getAllFinalImagesOfArtist: getAllFinalImagesOfArtist,
+  db: db,
+  getUserId: getUserId,
+  saveImageToFinalImage: saveImageToFinalImage,
+  dummyData: dummyData
 };
-
-
->>>>>>> 8747811f729ae19f03c8ebbf784b4294b1ebcfe9
